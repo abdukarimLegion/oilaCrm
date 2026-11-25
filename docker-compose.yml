@@ -1,0 +1,52 @@
+name: oilacrm
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-oilacrm}
+      POSTGRES_USER: ${DB_USER:-oilacrm}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-oilacrm}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-oilacrm} -d ${DB_NAME:-oilacrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/OWNER/oilacrm-backend:latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-oilacrm}
+      DB_USER: ${DB_USER:-oilacrm}
+      DB_PASSWORD: ${DB_PASSWORD:-oilacrm}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      PORT: 8080
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8080"
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/OWNER/oilacrm-frontend:latest}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
